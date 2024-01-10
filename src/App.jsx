@@ -1,5 +1,6 @@
-import { useState } from "react";
+import ConnectedTvIcon from "@mui/icons-material/ConnectedTv";
 import SendIcon from "@mui/icons-material/Send";
+import { Box } from "@mui/material";
 import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
 import FormControl from "@mui/material/FormControl";
@@ -7,43 +8,64 @@ import Input from "@mui/material/Input";
 import InputLabel from "@mui/material/InputLabel";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
-import ConnectedTvIcon from "@mui/icons-material/ConnectedTv";
+import { useRef, useState } from "react";
 import "./App.css";
-import { Box } from "@mui/material";
-import { SocketServer } from "./socket-server";
 
 function App() {
   const [serverIp, setServerIp] = useState("");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("....");
+  const [time, setTime] = useState(15);
   const [isConnected, setIsConnected] = useState(false);
-  let socketServer;
-
+  const connection = useRef(null);
+  
   const handleClickConnect = () => {
     if (!!serverIp) {
-      socketServer = new SocketServer(
-        serverIp,
-        () => {
-          setIsConnected(true);
-        },
-        () => {
-          setIsConnected(false);
-        },
-        (status) => {
-          setStatus(status);
-        }
-      );
+      setStatus(`conectando no servidor ${serverIp}:15345`);
+      const ws = new WebSocket(`ws://${serverIp}:15345`);
 
-      !!socketServer && socketServer.connect();
+      ws.onopen = (event) => {
+        ws.send('opened');
+        console.log('Websocket openned');
+        setStatus(`conexão realizada com sucesso`);
+        setIsConnected(true);
+      };
+
+      ws.onmessage = (message) => {
+        setStatus(message);
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket closed');
+        setStatus(`conexão fechada com sucesso`);
+        setIsConnected(false);
+      }
+
+      ws.onerror = (error) => {
+        console.error(error);
+        setStatus(`erro na conexão`);
+        setIsConnected(false);
+      }
+
+      connection.current = ws;
     }
   };
 
   const handleClickDisconnect = () => {
-    !!socketServer && socketServer.disconnect();
+    if (!!serverIp) {
+      if (!!connection.current) {
+        connection.current.close();
+      }
+    }
   };
 
   const handleClickSend = () => {
-    !!message && !!socketServer && socketServer.sendMessage(message);
+    if (!!connection.current) {
+      if (!!message) {
+        connection.current.send(`msg:${message}:${time}`);
+        setMessage('');
+      }
+    }
   };
 
   return (
@@ -73,7 +95,7 @@ function App() {
             <Stack sx={{ pt: 4 }} direction='column' spacing={2} justifyContent='center'>
               <FormControl sx={{ m: 1 }} variant='standard'>
                 <InputLabel htmlFor='ip-input'>IP do servidor:</InputLabel>
-                <Input id='ip-input' type='ip' value={serverIp} onChange={(e) => setServerIp(e.target.value)} />
+                <Input id='ip-input' type='text' value={serverIp} onChange={(e) => setServerIp(e.target.value)} />
               </FormControl>
               <Button variant='contained' size='medium' endIcon={<ConnectedTvIcon />} onClick={handleClickConnect}>
                 Conectar
@@ -81,10 +103,17 @@ function App() {
             </Stack>
           )) || (
             <Stack sx={{ pt: 4 }} direction='column' spacing={2} justifyContent='center'>
-              <FormControl sx={{ m: 1 }} variant='standard'>
-                <InputLabel htmlFor='message-input'>Palavra:</InputLabel>
-                <Input id='message-input' type='ip' value={message} onChange={(e) => setMessage(e.target.value)} />
-              </FormControl>
+              <Stack sx={{ pt: 4 }} direction='column' spacing={2} justifyContent='center'>
+                <FormControl sx={{ m: 1 }} variant='standard'>
+                  <InputLabel htmlFor='message-input'>Palavra:</InputLabel>
+                  <Input id='message-input' type='text' value={message} onChange={(e) => setMessage(e.target.value)} />
+                </FormControl>
+                <FormControl sx={{ m: 1 }} variant='standard'>
+                  <InputLabel htmlFor='time-input'>Tempo (s):</InputLabel>
+                  <Input id='time-input' type='number' value={time} onChange={(e) => setTime(e.target.value)} />
+                </FormControl>
+              </Stack>
+              
               <Stack direction='row' spacing={2} justifyContent={"center"}>
                 <Button
                   variant='contained'
